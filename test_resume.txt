@@ -1,0 +1,37 @@
+Sample Resume - Full Stack Developer
+
+Name: John Doe
+Email: john.doe@example.com
+Phone: +1-234-567-8900
+
+SUMMARY
+Experienced Full Stack Developer with 5+ years of expertise in building scalable web applications using React, Node.js, Python, and MongoDB. Proven track record of delivering high-quality software solutions.
+
+TECHNICAL SKILLS
+- Frontend: React, TypeScript, Next.js, TailwindCSS
+- Backend: Node.js, Python, FastAPI, Express
+- Databases: MongoDB, PostgreSQL, Redis
+- Cloud: AWS, Docker, Kubernetes
+- Tools: Git, CI/CD, Jest, Cypress
+
+EXPERIENCE
+Senior Full Stack Developer | Tech Corp
+Jan 2021 - Present
+- Built microservices architecture serving 1M+ users
+- Implemented real-time features using WebSockets
+- Reduced API response time by 40%
+
+Full Stack Developer | Startup Inc
+Jun 2019 - Dec 2020
+- Developed e-commerce platform with React and Node.js
+- Integrated payment gateways (Stripe, PayPal)
+- Managed MongoDB database with 100k+ records
+
+EDUCATION
+B.S. Computer Science | University of Technology
+2015 - 2019
+
+PROJECTS
+- AI Chatbot: Built using LangChain and OpenAI
+- Real-time Dashboard: React + WebSockets
+- API Gateway: FastAPI + Redis caching
