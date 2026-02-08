@@ -508,6 +508,7 @@ export default function InterviewRoom({ role }: { role: string }) {
             {/* Header */}
             <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/50 backdrop-blur-md">
                 <div className="flex items-center gap-4">
+                    <img src="/logo.png" alt="Zero" className="h-10 w-10 object-contain" />
                     <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
                     <span className="font-semibold text-lg">Interview in Session</span>
                 </div>

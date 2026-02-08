@@ -151,6 +151,7 @@ export default function QuizRound({ domain, resumeText, onComplete }: QuizRoundP
             {/* Header */}
             <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/50">
                 <div className="flex items-center gap-4">
+                    <img src="/logo.png" alt="Zero" className="h-10 w-10 object-contain" />
                     <div className="h-3 w-3 rounded-full bg-blue-500 animate-pulse" />
                     <span className="font-semibold text-lg">Round 1/2 - Technical Quiz</span>
                 </div>
@@ -179,8 +180,8 @@ export default function QuizRound({ domain, resumeText, onComplete }: QuizRoundP
                                 key={index}
                                 onClick={() => handleAnswer(index)}
                                 className={`w-full p-4 text-left rounded-lg border-2 transition-all ${selectedAnswers[currentQuestion] === index
-                                        ? "border-blue-500 bg-blue-500/20"
-                                        : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600"
+                                    ? "border-blue-500 bg-blue-500/20"
+                                    : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600"
                                     }`}
                             >
                                 <span className="font-semibold mr-3">{String.fromCharCode(65 + index)}.</span>

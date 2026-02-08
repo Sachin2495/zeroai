@@ -82,6 +82,13 @@ export default function CandidateDashboard({ onStart }: CandidateDashboardProps)
         <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center space-y-2">
+                    <div className="flex justify-center mb-4">
+                        <img
+                            src="/logo.png"
+                            alt="Zero - AI Interview System"
+                            className="h-32 w-32 object-contain"
+                        />
+                    </div>
                     <h1 className="text-4xl font-bold tracking-tight text-primary">Zero</h1>
                     <p className="text-muted-foreground">The AI-Powered Candidate Assessment System</p>
                 </div>
