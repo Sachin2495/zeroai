@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: zero-backend
+    runtime: docker
+    repo: https://github.com/Sachin2495/zeroai.git
+    region: oregon
+    branch: main
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    autoDeploy: true
