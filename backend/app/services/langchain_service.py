@@ -1,197 +1,74 @@
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_ollama import ChatOllama
-from langchain_groq import ChatGroq
-import os
-from dotenv import load_dotenv
+import json
+import re
+from typing import Any, Dict, List
+from langchain_core.messages import HumanMessage, SystemMessage
+from app.services.llm import get_llm
 
-load_dotenv()
+QUIZ_LENGTH = 10
+MIN_QUIZ_LENGTH = 5
+
+
+def _extract_json_array(content: str) -> List[Any]:
+    """Pulls the first JSON array out of an LLM reply, tolerating code fences and chatter."""
+    content = re.sub(r"<think>[\s\S]*?</think>", "", content)
+    content = content.replace("```json", "").replace("```", "").strip()
+    start, end = content.find("["), content.rfind("]")
+    if start == -1 or end <= start:
+        raise ValueError("No JSON array found in quiz response")
+    return json.loads(content[start:end + 1])
+
+
+def _validate_questions(raw: List[Any]) -> List[Dict[str, Any]]:
+    questions = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        options = [str(o).strip() for o in item.get("options", []) if str(o).strip()]
+        try:
+            correct = int(item.get("correct_index", -1))
+        except (TypeError, ValueError):
+            continue
+        if question and len(options) == 4 and 0 <= correct < 4:
+            questions.append({"question": question, "options": options, "correct_index": correct})
+    return questions[:QUIZ_LENGTH]
+
 
 class InterviewAgent:
+    """Generates the round-1 multiple-choice screening quiz."""
+
     def __init__(self):
-        self.provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-        print(f"Initializing InterviewAgent with provider: {self.provider}")
-        
-        if self.provider == "groq":
-            api_key = os.getenv("GROQ_API_KEY")
-            if not api_key:
-                raise ValueError("GROQ_API_KEY not found in environment variables")
-            self.llm = ChatGroq(
-                temperature=0.7,
-                model_name="llama-3.3-70b-versatile",
-                api_key=api_key
-            )
-        else:
-            # Default to Ollama
-            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            self.llm = ChatOllama(
-                model="llama3:latest",
-                temperature=0.7,
-                base_url=base_url
-            )
-            
-        self.history = []
-        self.system_prompt = (
-            "You are Zero, an advanced AI technical interviewer. "
-            "Your goal is to assess the candidate's skills accurately while maintaining a professional and empathetic persona. "
-            "1. Adapt your tone based on the candidate's reported emotion. If they are 'nervous', be reassuring. "
-            "2. Do NOT ask generic questions. Pivot based on their last answer. "
-            "3. Keep responses concise (under 3 sentences) to maintain conversation flow."
-        )
+        self.llm = get_llm(temperature=0.5)
 
-    async def generate_response(self, transcript: str, emotion_label: str) -> str:
+    async def generate_quiz(self, resume_text: str, domain: str) -> List[Dict[str, Any]]:
         """
-        Generates a response using the configured LLM provider.
-        """
-        try:
-            # Add empathetic context for nervous candidates
-            emotion_context = ""
-            if emotion_label.lower() == "nervous":
-                emotion_context = (
-                    "The candidate appears nervous. Start your response with a brief reassuring statement "
-                    "like 'No worries, take your time' or 'That's perfectly fine' or 'You're doing great' "
-                    "before proceeding with your question or feedback. Keep a warm, supportive tone."
-                )
-            
-            # Construct dynamic prompt
-            system_msg = self.system_prompt
-            if emotion_context:
-                system_msg += f"\n\nIMPORTANT: {emotion_context}"
-            
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_msg),
-                *[("user", msg["content"]) if msg["role"] == "user" else ("assistant", msg["content"]) for msg in self.history[-4:]],
-                ("user", f"[Emotion: {emotion_label}] {transcript}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            
-            response = await chain.ainvoke({})
-            
-            # Update History
-            self.history.append({"role": "user", "content": transcript})
-            self.history.append({"role": "assistant", "content": response})
-            
-            return response
-            
-        except Exception as e:
-            print(f"LLM Error ({self.provider}): {e}")
-            return "I'm having a bit of trouble connecting to my thought process. Could you repeat that?"
-
-    async def generate_quiz(self, resume_text: str, domain: str):
-        """
-        Generate 10 domain-specific quiz questions from resume.
-        Returns list of {question, options, correct_index}
+        Generate domain-specific quiz questions from the resume.
+        Returns list of {question, options, correct_index}.
         """
         quiz_prompt = (
             f"You are a technical recruiter creating a quiz for a {domain} position. "
-            f"Based on the candidate's resume below, generate EXACTLY 10 multiple-choice questions. "
+            f"Based on the candidate's resume below, generate EXACTLY {QUIZ_LENGTH} multiple-choice questions. "
             f"Questions should test their claimed skills, experience, and domain knowledge. "
-            f"Format: Return ONLY valid JSON array with this structure:\n"
-            f"[\n"
-            f'  {{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}},\n'
-            f"  ...\n"
-            f"]\n\n"
-            f"Resume:\n{resume_text[:2000]}\n\n"
-            f"Generate 10 {domain}-specific questions now:"
+            f"Each question has exactly 4 options and one correct answer.\n"
+            f"Return ONLY a valid JSON array with this structure, no other text:\n"
+            f'[{{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}}]\n\n'
+            f"Resume:\n{resume_text[:2000]}\n"
         )
-        
-        try:
-            # Use simple messages without template variables
-            from langchain_core.messages import HumanMessage, SystemMessage
-            
-            messages = [
-                SystemMessage(content="You are a technical quiz generator. Output only valid JSON."),
-                HumanMessage(content=quiz_prompt)
-            ]
-            
-            quiz_json = await self.llm.ainvoke(messages)
-            
-            # Extract content from response
-            if hasattr(quiz_json, 'content'):
-                quiz_json = quiz_json.content
-            
-            # Clean and parse JSON
-            quiz_json = str(quiz_json).replace("```json", "").replace("```", "").strip()
-            
-            import json
-            questions = json.loads(quiz_json)
-            
-            # Ensure exactly 10 questions
-            if len(questions) > 10:
-                questions = questions[:10]
-            elif len(questions) < 10:
-                raise ValueError(f"Only {len(questions)} questions generated")
-            
-            return questions
-            
-        except Exception as e:
-            print(f"Quiz Generation Error: {e}")
-            raise Exception(f"Failed to generate quiz: {str(e)}")
+        messages = [
+            SystemMessage(content="You are a technical quiz generator. Output only valid JSON."),
+            HumanMessage(content=quiz_prompt),
+        ]
 
-    async def generate_report(self, session_id: str) -> str:
-        """
-        Generates a comprehensive interview report.
-        """
-        if not self.history or len(self.history) < 2:
-            # Generate basic report if minimal conversation
-            return self._generate_basic_report()
-        
-        conversation_summary = "\n".join([
-            f"{'Candidate' if msg['role'] == 'user' else 'AI'}: {msg['content'][:200]}"
-            for msg in self.history[-10:]  # Last 10 messages
-        ])
-        
-        report_prompt = f"""
-Based on this interview conversation, generate a comprehensive candidate assessment report.
-
-Conversation:
-{conversation_summary}
-
-Generate a detailed JSON report with:
-- overall_score (0-100)
-- strengths (list of 3-5 strengths)
-- weaknesses (list of 3-5 areas for improvement)
-- summary (2-3 sentence overall assessment)
-- recommendation (hire/consider/reject with explanation)
-
-Return ONLY valid JSON.
-"""
-        
-        try:
-            from langchain_core.messages import HumanMessage, SystemMessage
-            
-            messages = [
-                SystemMessage(content="You are an expert technical interviewer creating assessment reports."),
-                HumanMessage(content=report_prompt)
-            ]
-            
-            response = await self.llm.ainvoke(messages)
-            
-            if hasattr(response, 'content'):
-                response = response.content
-            
-            return str(response)
-            
-        except Exception as e:
-            print(f"Report Generation Error: {e}")
-            return self._generate_basic_report()
-    
-    def _generate_basic_report(self) -> str:
-        """Generate a basic report when conversation history is minimal."""
-        import json
-        return json.dumps({
-            "overall_score": 70,
-            "strengths": [
-                "Engaged with the interview process",
-                "Willing to participate in technical assessment",
-                "Showed interest in the role"
-            ],
-            "weaknesses": [
-                "Limited conversation data for full assessment",
-                "Needs more in-depth technical discussion",
-                "Interview duration was brief"
-            ],
-            "summary": "Candidate completed the initial interview process. More extensive technical discussion would be beneficial for a complete evaluation.",
-            "recommendation": "Consider for next round - Schedule a longer technical interview to better assess capabilities."
-        })
+        last_error: Exception = ValueError("Quiz generation failed")
+        for attempt in range(2):
+            try:
+                resp = await self.llm.ainvoke(messages)
+                content = resp.content if hasattr(resp, "content") else str(resp)
+                questions = _validate_questions(_extract_json_array(str(content)))
+                if len(questions) < MIN_QUIZ_LENGTH:
+                    raise ValueError(f"Only {len(questions)} valid questions generated")
+                return questions
+            except Exception as e:
+                print(f"[WARN] Quiz generation attempt {attempt + 1} failed: {e}")
+                last_error = e
+        raise RuntimeError(f"Failed to generate quiz: {last_error}")

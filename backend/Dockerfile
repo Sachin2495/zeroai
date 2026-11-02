@@ -1,65 +1,25 @@
-# Multi-stage build for optimized image size
-FROM python:3.11-slim as builder
-
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies required for ML libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    g++ \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies with increased timeout
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --timeout=1000 -r requirements.txt
-
-# Production stage
+# Backend image for AWS Lambda (container image from ECR, exposed via a Function URL).
+# The AWS Lambda Web Adapter extension forwards Lambda invocations to uvicorn over HTTP,
+# so the same image also runs locally with `docker run -p 8080:8080`.
 FROM python:3.11-slim
 
-WORKDIR /app
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
-COPY . .
-
-# Create cache directory for Hugging Face models
-RUN mkdir -p /app/.cache/huggingface && \
-    chmod -R 777 /app/.cache
-
-# Set environment variables for optimization
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HF_HOME=/app/.cache/huggingface \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8080 \
+    AWS_LWA_READINESS_CHECK_PATH=/ \
+    HOME=/tmp
 
-# Preload models during build to speed up startup
-# RUN python preload_models.py
+WORKDIR /var/task
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Expose port
-EXPOSE 8000
+COPY main.py .
+COPY app ./app
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+EXPOSE 8080
 
-# Run the application with increased timeout workers
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "60"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]

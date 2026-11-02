@@ -19,6 +19,9 @@ const config = {
         },
         extend: {
             colors: {
+                zinc: {
+                    850: "#1f1f23",
+                },
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",
                 ring: "hsl(var(--ring))",
@@ -67,10 +70,20 @@ const config = {
                     from: { height: "var(--radix-accordion-content-height)" },
                     to: { height: "0" },
                 },
+                "wave-bar": {
+                    "0%, 100%": { height: "20%" },
+                    "50%": { height: "90%" },
+                },
+                "soft-pulse": {
+                    "0%, 100%": { opacity: "0.35", transform: "scale(1)" },
+                    "50%": { opacity: "0.75", transform: "scale(1.05)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
+                "wave-bar": "wave-bar 1.2s ease-in-out infinite",
+                "soft-pulse": "soft-pulse 3s ease-in-out infinite",
             },
         },
     },

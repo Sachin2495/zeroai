@@ -15,6 +15,9 @@ class InteractionRequest(BaseModel):
     transcript: str
     emotion_label: str
     emotion_score: float
+    gaze_direction: Optional[str] = "center"
+    face_present: Optional[bool] = True
+    tab_switch_alert: Optional[bool] = False
 
 class AIResponse(BaseModel):
     text: str

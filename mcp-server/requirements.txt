@@ -1,5 +1,0 @@
-mcp
-transformers
-torch
-numpy
-scikit-learn
